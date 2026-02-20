@@ -1,0 +1,26 @@
+# Documentation for camera settings: https://docs.baslerweb.com/aca2040-90uc
+# Documentation for detector settings: https://pupil-apriltags.readthedocs.io/en/stable/api.html
+[ips]
+# Enables debug mode
+DEBUG = false
+# Focal length/center for camera: fx, fy, cx, cy
+camera_coefficients = [ 1800, 1800, 1024, 1024 ]
+# AprilTag side length (in meters)
+tag_size = 0.15
+# Camera exposure time (in microseconds) - lower values decrease light level and add grain, but help compensate for motion blur
+exposure = 771
+# Camera gain level (in dB) - Higher lets more light into the frame
+gain = 5
+# Adjust for dark current by lightening the image (offsets pixel gray value by amount)
+black_level = 15
+# Higher values lower image resolution (only worthwhile values seem to be 1.0, 1.5, 2.0, and 3.0)
+# Only 2.0 has yielded a decent combo of framerate (~30Hz) & tag detection
+quad_decimate = 2.0
+# Apply gaussian blur to the image to correct for noise (higher values apply more noise)
+quad_sigma = 0.0
+# Apply sharpening to the decoded images (higher values sharpen more)
+decode_sharpening = 0.2
+# Threads to allocate for detection
+threads = 8
+# Snaps quads to strong gradients within the image (costs barely anything and can help quite a bit - just leave it)
+refined_edges = 1
