@@ -1,0 +1,3 @@
+uint8 vehicle_id
+float64 motor_throttle
+float64 steering_servo

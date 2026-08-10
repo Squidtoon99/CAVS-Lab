@@ -1,0 +1,9 @@
+# For receiver nodes, port refers to the local port in the ROS system at which the data is received from the dSPACE platform
+ros_integration_1_bridge_rosencode_receiver_node:
+  ros__parameters:
+    port: 11111
+    topic_out: 'ds_to_ros'
+
+
+# For transmitter nodes, ip and port refers to the destination platform's ip and port to which the ROS system transmits data
+
