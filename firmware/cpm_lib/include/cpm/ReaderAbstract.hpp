@@ -1,0 +1,156 @@
+#pragma once
+
+//For waiting
+#include <chrono>
+#include <condition_variable>
+
+#include "cpm/ReaderParent.hpp"
+
+using namespace std::placeholders;
+
+namespace cpm
+{
+    /**
+     * \class ReaderAbstract
+     * \brief Creates a DDS Reader that provides the simple take() function for getting all samples received after the last call of "take()"
+     * Abstraction from different DDS Reader implementations
+     * Difference to cpm::Reader: That one is supposed to give the latest sample w.r.t. timing information in the header. ReaderAbstract works more general than that.
+     * 
+     * IMPORTANT: Only keeps the newest 2000 samples at max.!
+     * \ingroup cpmlib
+     */
+    template<typename T>
+    class ReaderAbstract
+    {
+    private:   
+        //! Mutex for access to get_sample and removing old messages
+        std::mutex m_mutex;
+        //! Internal buffer that stores flushed messages until they are (partially) removed in get_sample
+        std::vector<typename T::type> messages_buffer;
+
+        //! Condition variable for waiting for new data
+        std::condition_variable cv;
+
+        //! Must be remembered internally to know if the buffer used must be reset when new data is taken from the internal DDS reader
+        bool history_keep_all;
+
+        /**
+         * \brief Callback that is called whenever new data is available in the DDS Reader
+         * \param samples Samples read by the reader
+         */
+        void on_data_available(std::vector<typename T::type> &samples)
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+
+            if (! history_keep_all)
+                messages_buffer.clear();
+
+            for (auto &sample : samples)
+            {
+                messages_buffer.push_back(sample);
+            }
+
+            //We assume that that data becomes useless with time,
+            //so it makes sense to cap the max. amount of data that can be buffered
+            //In this case: 2000 messages
+            if (messages_buffer.size() > 2000)
+            {
+                auto diff = messages_buffer.size() - 2000;
+                messages_buffer.erase(messages_buffer.begin(), messages_buffer.begin() + diff);
+            }
+
+            //Used by wait_for_unread_message
+            cv.notify_all();
+        }
+
+        //! Internal Reader class that takes care of must of the eProsima initialization. Some issues arised when using inheritance w.r.t. destruction order, although they should be fixed now.
+        std::shared_ptr<cpm::ReaderParent<T>> reader_parent;
+
+    public:
+        ReaderAbstract(const ReaderAbstract&) = delete;
+        ReaderAbstract& operator=(const ReaderAbstract&) = delete;
+        ReaderAbstract(const ReaderAbstract&&) = delete;
+        ReaderAbstract& operator=(const ReaderAbstract&&) = delete;
+
+        // ~ReaderAbstract() {
+        //     reader_parent.reset();
+        // }
+        
+        /**
+         * \brief Constructor for a ReaderAbstract which is communicating within the ParticipantSingleton
+         * Allows to set the topic name and some QoS settings
+         * \param topic Name of the topic to read in
+         * \param reliable Set the reader to be reliable (true) or use best effort (false, default)
+         * \param history_keep_all Keep all received messages (true) or not (false, default)
+         * \param transient_local Receive messages sent before joining (true) or not (false, default)
+         */
+        ReaderAbstract(std::string topic, bool reliable = false, bool history_keep_all = false, bool transient_local = false)
+        : ReaderAbstract(cpm::ParticipantSingleton::Instance(), topic, reliable, history_keep_all, transient_local)
+        {
+        }
+
+        /**
+         * \brief Constructor for a ReaderAbstract that communicates within another domain
+         * Allows to set the topic name and some QoS settings
+         * \param _participant The domain (participant) in which to read
+         * \param topic Name of the topic to read in
+         * \param reliable Set the reader to be reliable (true) or use best effort (false, default)
+         * \param history_keep_all Keep all received messages (true) or not (false, default)
+         * \param transient_local Receive messages sent before joining (true) or not (false, default)
+         */
+        ReaderAbstract(
+            std::shared_ptr<eprosima::fastdds::dds::DomainParticipant> _participant, 
+            std::string topic, 
+            bool reliable = false, 
+            bool _history_keep_all = false, 
+            bool transient_local = false
+        ) : 
+          history_keep_all(_history_keep_all)
+        {
+            reader_parent = std::make_shared<cpm::ReaderParent<T>>(std::bind(&ReaderAbstract::on_data_available, this, _1), _participant, topic, reliable, _history_keep_all, transient_local);
+        }
+        
+        /**
+         * \brief Get the received messages
+         */
+        std::vector<typename T::type> take()
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+
+            auto return_buffer = messages_buffer;
+            messages_buffer.clear();
+
+            return return_buffer;
+        }
+
+        /**
+         * \brief Waits for unread messages up to timeout_ms milliseconds.
+         * Custom implementation of the eProsma equivalent, 
+         * due to different usage of the reader internally.
+         * \param timeout_ms Max. time in milliseconds to wait until return
+         * \return True if new data is available, else false
+         */
+        bool wait_for_unread_message(uint32_t timeout_ms)
+        {
+            std::unique_lock<std::mutex> lock(m_mutex);
+
+            cv.wait_for(lock, std::chrono::milliseconds(timeout_ms), [this] 
+              {
+                  //In case of spurious wake up, check if it should still be waiting
+                  return messages_buffer.size() > 0;
+              }
+            );
+
+            //After timeout or wait exits: Return if messages were actually received
+            return messages_buffer.size() > 0;
+        }
+
+        /**
+         * \brief Returns # of matched writers
+         */
+        size_t matched_publications_size()
+        {
+            return reader_parent->matched_publications_size();
+        }
+    };
+}

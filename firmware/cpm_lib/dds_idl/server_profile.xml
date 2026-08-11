@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<profiles xmlns="http://www.eprosima.com">
+    <participant profile_name="participant_profile_client_full_example" is_default_profile="true">
+        <rtps>
+            <builtin>
+                <discovery_config>
+                    <!-- Set participant as CLIENT -->
+                    <discoveryProtocol>CLIENT</discoveryProtocol>
+                    <!--
+                        Set a list of remote servers (locators) to which this
+                        client connects.
+                    -->
+                    <discoveryServersList>
+                        <!-- Set REMOTE SERVER's listening locator for PDP -->
+                        <locator>
+                            <udpv4>
+                                <address>10.169.130.248</address>
+                                <!-- <address>100.100.245.26</address> -->
+                                <port>11811</port>
+                            </udpv4>
+                        </locator>
+                    </discoveryServersList>
+                </discovery_config>
+            </builtin>
+        </rtps>
+    </participant>
+</profiles>
