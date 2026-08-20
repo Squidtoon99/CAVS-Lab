@@ -3,6 +3,7 @@
 #include <string>
 #include <sstream>
 #include <vector>
+#include <cstdint>
 
 /**
  * \file CommandLineReader.hpp

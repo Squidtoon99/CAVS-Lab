@@ -21,7 +21,7 @@ add_compile_options(-Wall -Wextra)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(BUILD_ARM "Build for ARM target architecture (Raspberry PI)" OFF)
-option(BUILD SIMULATION "Build components in simulation mode" OFF)
+option(BUILD_SIMULATION "Build components in simulation mode" OFF)
 option(BUILD_TESTING "Build monorepo test suites" OFF)
 
 message(STATUS "--- Monorepo Configuration ---")

@@ -1,4 +1,5 @@
 #include "cpm/CommandLineReader.hpp"
+#include <cstdint>
 
 /**
  * \file CommandLineReader.cpp

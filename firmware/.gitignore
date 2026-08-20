@@ -77,3 +77,6 @@ QOS_LOCAL_COMMUNICATION.xml
 Thumbs.db
 ehtthumbs.db
 
+# DDS IDL Generation
+cpm_lib/include/cpm/dds/
+cpm_lib/dds_idl_cpp/

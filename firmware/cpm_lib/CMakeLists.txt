@@ -7,16 +7,21 @@ add_definitions(-Wall -Wextra -Werror=return-type -O2)
 include_directories(src)
 include_directories(include)
 
-file(GLOB_RECURSE SOURCE_DDS "dds_idl_cpp/*.cxx")
+file(GLOB_RECURSE SOURCE_DDS
+    "dds_idl_cpp/*.cxx"
+    "dds_idl_cpp/*.cpp"
+    "include/cpm/dds/*.cxx"
+    "include/cpm/dds/*.cpp"
+)
 
 set(SOURCE_CPM
     src/ParticipantSingleton.cpp
     include/cpm/ParticipantSingleton.hpp
 
-        
+
     include/cpm/ParticipantSingleton.hpp
     src/ParticipantSingleton.cpp
-    
+
     include/cpm/Participant.hpp
     src/Participant.cpp
 
@@ -27,7 +32,7 @@ set(SOURCE_CPM
     include/cpm/ParameterReceiver.hpp
     src/ParameterReceiver.cpp
 
-    
+
     include/cpm/CommandLineReader.hpp
     src/CommandLineReader.cpp
 
@@ -43,7 +48,7 @@ set(SOURCE_CPM
     src/Timer.cpp
 
     include/cpm/stamp_message.hpp
-    
+
     include/cpm/TimerFD.hpp
     src/TimerFD.cpp
     include/cpm/SimpleTimer.hpp
@@ -52,7 +57,7 @@ set(SOURCE_CPM
     src/TimerSimulated.cpp
     include/cpm/exceptions.hpp
     src/exceptions.cpp
-    
+
 
     src/Logging.cpp
     include/cpm/Logging.hpp
@@ -66,7 +71,7 @@ set(SOURCE_CPM
     include/cpm/TimeMeasurement.hpp
     src/TimeMeasurement.cpp
 )
-if(NOT BUILD_ARM) 
+if(NOT BUILD_ARM)
     # With RTIs ARM toolchain this leads to linker errors
     set(SOURCE_CPM
         ${SOURCE_CPM}
@@ -83,9 +88,9 @@ if(BUILD_ARM)
     option(BUILD_TESTING "" OFF)
     add_subdirectory(thirdparty/Fast-DDS/)
 
-    add_definitions(-fpic -DRTI_UNIX -DRTI_LINUX -march=armv6 -mfpu=vfp -mfloat-abi=hard -mlong-calls)
+    add_definitions(-fpic -DRTI_UNIX -DRTI_LINUX)
 else()
-    # Configuration for eProsima Fast-DDS 
+    # Configuration for eProsima Fast-DDS
     # Find requirements
     # For this to work, the current (2.3.x) version of Fast-DDS (and CDR, foonathan_memory) must be installed
     # Do this by creating a build folder in the thirdparty folders for each of those projects
@@ -109,6 +114,12 @@ add_library(cpm SHARED
     ${SOURCE_DDS}
     ${SOURCE_CPM}
     )
+
+target_include_directories(cpm PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/dds_idl_cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
 
 #include_directories(${CMAKE_SOURCE_DIR}/build/thirdparty/Fast-DDS/include)
 #include_directories(${CMAKE_SOURCE_DIR}/thirdparty/Fast-DDS/include)
