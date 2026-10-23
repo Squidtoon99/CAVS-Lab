@@ -1,6 +1,7 @@
 import math
 import sys
 import time
+import numpy as np
 from scipy.spatial.transform import Rotation
 
 import rclpy
@@ -32,7 +33,8 @@ class VehicleDetectionNode(Node):
                 ('apriltag.tag_size', 0.15),             # Tag size in meters
                 ('apriltag.camera_coefficients',[1800.0, 1800.0, 1024.0, 1024.0]), # [fx, fy, cx, cy]
                 ('system.debug', False),                 # Debug UI disabled by default
-                ('system.number_vehicles', 20)           # Max vehicle ID to track
+                ('system.number_vehicles', 20),          # Max vehicle ID to track
+                ('system.dropout_timeout', 1.0)          # Seconds before a missing tag is considered lost
             ]
         )
 
@@ -41,6 +43,7 @@ class VehicleDetectionNode(Node):
         self.tag_size = self.get_parameter('apriltag.tag_size').value
         self.debug_mode = self.get_parameter('system.debug').value
         self.number_vehicles = self.get_parameter('system.number_vehicles').value
+        self.dropout_timeout = self.get_parameter('system.dropout_timeout').value
         camera_fps = self.get_parameter('camera.fps').value
 
         # 3. Initialize AprilTag Detector
@@ -73,6 +76,11 @@ class VehicleDetectionNode(Node):
             self.window_name = 'IPS AprilTag Debug'
             cv2.namedWindow(self.window_name, cv2.WINDOW_NORMAL)
             cv2.resizeWindow(self.window_name, 800, 800)
+
+            self.last_seen = {}
+            self.last_centers = {}
+            self.lost_tags = set()
+            self.failure_heatmap = None
 
         self.fps_start = time.time()
         self.frames = 0
@@ -133,6 +141,10 @@ class VehicleDetectionNode(Node):
             tag_size=self.tag_size
         )
 
+        # Track dropped AprilTag detections in debug mode
+        if self.debug_mode:
+            self.update_debug_tracking(detected, gray_img)
+
         # Process & Publish Detected Tags
         for tag in detected:
             vehicle_id = tag.tag_id
@@ -175,8 +187,86 @@ class VehicleDetectionNode(Node):
         # Release the buffer back to Pylon
         grabResult.Release()
 
+    def update_debug_tracking(self, detected, gray_img):
+        now = time.time()
+
+        if self.failure_heatmap is None:
+            self.failure_heatmap = np.zeros(gray_img.shape, dtype=np.float32)
+
+        detected_ids = set()
+
+        for tag in detected:
+            tag_id = tag.tag_id
+
+            if tag_id not in self.observation_publishers:
+                continue
+
+            detected_ids.add(tag_id)
+            self.last_seen[tag_id] = now
+            self.last_centers[tag_id] = tuple(tag.center.astype(int))
+
+            # Allow a new dropout to be recorded if the tag returns
+            self.lost_tags.discard(tag_id)
+
+        for tag_id, last_seen in self.last_seen.items():
+            if tag_id in detected_ids:
+                continue
+
+            if tag_id in self.lost_tags:
+                continue
+
+            if now - last_seen < self.dropout_timeout:
+                continue
+
+            x, y = self.last_centers[tag_id]
+            self.failure_heatmap[y, x] += 1.0
+
+            # Count only one event for this continuous dropout
+            self.lost_tags.add(tag_id)
+
+    def apply_heatmap_overlay(self, display_img):
+        if self.failure_heatmap is None or not np.any(self.failure_heatmap):
+            return display_img
+
+        # Blur individual failure points into visible regions
+        blurred = cv2.GaussianBlur(
+            self.failure_heatmap,
+            (0, 0),
+            sigmaX=30
+        )
+
+        # Normalize heat intensity to 0-255
+        normalized = cv2.normalize(
+            blurred,
+            None,
+            0,
+            255,
+            cv2.NORM_MINMAX
+        ).astype(np.uint8)
+
+        # Convert normalized intensity to heat-map colors
+        heatmap = cv2.applyColorMap(normalized, cv2.COLORMAP_JET)
+
+        # Blend heat map with the camera image
+        blended = cv2.addWeighted(
+            display_img,
+            0.75,
+            heatmap,
+            0.25,
+            0
+        )
+
+        # Leave areas without failure data unchanged
+        mask = normalized > 0
+        display_img[mask] = blended[mask]
+
+        return display_img
+
     def render_debug_view(self, gray_img, detected):
         display_img = cv2.cvtColor(gray_img, cv2.COLOR_GRAY2BGR)
+
+        # Heat Map Overlay
+        display_img = self.apply_heatmap_overlay(display_img)
         
         # FPS Calculation
         self.frames += 1
